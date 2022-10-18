@@ -23,7 +23,7 @@ from wordcloud import WordCloud, STOPWORDS, ImageColorGenerator
 import string
 
 import nltk
-nltk.download('stopwords')
+# nltk.download('stopwords')
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from Sastrawi.StopWordRemover.StopWordRemoverFactory import StopWordRemoverFactory

@@ -10,6 +10,8 @@ transformers==4.18.0
 wordcloud==1.8.2.2
 nltk==3.7
 Sastrawi==1.0.1
-torch>1.10.2
 scipy==1.9.1
 scikit_learn==1.1.2
+--find-links https://download.pytorch.org/whl/torch_stable.html
+torch==1.11.0+cpu
+torchvision==0.12.0+cpu

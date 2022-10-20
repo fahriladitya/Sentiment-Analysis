@@ -181,8 +181,8 @@ def preprocess_this(text_col):
 # roBERTa
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
-tokenizer = AutoTokenizer.from_pretrained("sahri/indonesiasentiment")
-model = AutoModelForSequenceClassification.from_pretrained("sahri/indonesiasentiment")
+tokenizer = AutoTokenizer.from_pretrained("roberta_model")
+model = AutoModelForSequenceClassification.from_pretrained("roberta_model")
 
 def roberta_predict(text_col):
   BATCH_SIZE = 100 

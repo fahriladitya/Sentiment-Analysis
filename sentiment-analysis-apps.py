@@ -53,7 +53,7 @@ def get_tweets(query):
   user_data = []
   request = client.search_recent_tweets(
       query = query, 
-      max_results=100,
+      max_results=10,
       tweet_fields=['created_at','lang','conversation_id'], 
       expansions=['author_id']
       )
@@ -181,8 +181,8 @@ def preprocess_this(text_col):
 # roBERTa
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
-tokenizer = AutoTokenizer.from_pretrained("roberta_model")
-model = AutoModelForSequenceClassification.from_pretrained("roberta_model")
+tokenizer = AutoTokenizer.from_pretrained("AsceticShibs/MovieReviewTrainedModParam")
+model = AutoModelForSequenceClassification.from_pretrained("AsceticShibs/MovieReviewTrainedModParam")
 
 def roberta_predict(text_col):
   BATCH_SIZE = 100 

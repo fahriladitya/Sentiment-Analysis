@@ -4,13 +4,13 @@ import tweepy
 import pandas as pd
 import numpy as np
 import re
-import pickle
+# import pickle
 from PIL import Image
 
 from tqdm import tqdm
 
 import os
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 import seaborn as sns
 # %matplotlib inline
 
@@ -53,7 +53,7 @@ def get_tweets(query):
   user_data = []
   request = client.search_recent_tweets(
       query = query, 
-      max_results=10,
+      max_results=15,
       tweet_fields=['created_at','lang','conversation_id'], 
       expansions=['author_id']
       )
@@ -104,9 +104,13 @@ sastrawi_stopwords = StopWordRemoverFactory().get_stop_words()
 
 # Additional stopwords
 additional_stopwords = [
-    'dengan', 'ia','bahwa','oleh', 'samaaaaaa', 'big', 'mouse', 'mouth', 
-    'miracle', 'cell', 'mencuri', 'raden', 'saleh', 'ngeri-ngeri', 'sedap', 'one', 'piece', 
+    'dengan', 'ia','bahwa','oleh', 'samaaaaaa'
+    ]
+
+query_titles = [
+    'big', 'mouse', 'mouth', 'miracle', 'in', 'no', 'cell', 'mencuri', 'raden', 'saleh', 'ngeri-ngeri', 'sedap', 'one', 'piece', 
     'red', 'cyberpunk', 'edgerunners', 'ivanna', 'purple', 'heart', 'kkn', 'penari', 'desa', 'thor', 'thunder', 'love'
+    'jujutsu', 'kaisen', 'ngeri', 'morbius', 'she-hulk', 'she', 'hulk', 'sri', 'asih', 'pengabdi', 'setan'
     ]
 
 # Final stopwords
@@ -128,6 +132,15 @@ def cleaning_proc(text_col):
     clean_str = clean_str.strip() # trim
     cleaned_text.append(clean_str)
   return cleaned_text
+
+# remove title  
+def remove_title(text_col):
+  no_title = []
+  for text in text_col:
+    clean_tokens = [w for w in text.split(" ") if (w not in query_titles) and (w != "")]
+    clean_text = " ".join(clean_tokens)
+    no_title.append(clean_text)
+  return no_title
 
 # text normalization
 def normalization_proc(text_col):
@@ -168,7 +181,8 @@ def stem_proc(text_col):
 def preprocess_this(text_col):
   text_col_df = pd.DataFrame(text_col)
   text_col_df['cleaned_text'] = cleaning_proc(text_col)
-  text_col_df['normalized_text'] = normalization_proc(text_col_df['cleaned_text'])
+  text_col_df['no_title_text'] = remove_title(text_col_df['cleaned_text'])
+  text_col_df['normalized_text'] = normalization_proc(text_col_df['no_title_text'])
   text_col_df['no_stopwords_text'] = stopwords_proc(text_col_df['normalized_text'], final_stopwords)
   text_col_df['stemmed_text'] = stem_proc(text_col_df['normalized_text'])
   text_col_df = text_col_df[text_col_df['stemmed_text'] != ""]
@@ -216,7 +230,75 @@ def roberta_predict(text_col):
           
   return sample_preprocessed
 
+# output functions
+def deploy_sentiment(query):
+  query  =  query + ' -is:retweet lang:id'
+  data = get_tweets(query)
+  data = data[['tweet_id', 'tweet_date','text']]
+  clean_data = preprocess_this(data['text'])
+  data = pd.concat([data, clean_data['stemmed_text']], axis=1)
+  data['sentiment'] = roberta_predict(data['stemmed_text'])
+  data.drop_duplicates(inplace = True)
+  data.reset_index(inplace = True, drop = True) 
+  # output_data = data[['tweet_id', 'tweet_date', 'text', 'sentiment']]
+  return data
 
+def deploy_wordcloud(output_table, title_stopwords):
+  output_table = output_table[['stemmed_text','sentiment']]
+  no_title = []
+  for text in output_table['stemmed_text']:
+    clean_tokens = [w for w in text.split(" ") if (w not in title_stopwords) and (w != "")]
+    clean_text = " ".join(clean_tokens)
+    no_title.append(clean_text)
+  output_table['stemmed_text'] = no_title
+
+  sample_neg = output_table.loc[output_table['sentiment'] == 'Negative'].reset_index(drop=True)
+  sample_net = output_table.loc[output_table['sentiment'] == 'Neutral'].reset_index(drop=True)
+  sample_pos = output_table.loc[output_table['sentiment'] == 'Positive'].reset_index(drop=True)
+
+  pos_text = " ".join(comm for comm in sample_pos["stemmed_text"])
+  st.markdown("<p style='text-align: center; color: #6D6E70;'>Positive Word Cloud</p>", unsafe_allow_html=True)
+
+  wc_pos = WordCloud(width=800, height=400, max_words=300).generate(pos_text)
+  plt.figure(figsize=(12,10))
+  plt.imshow(wc_pos, interpolation="bilinear")
+  plt.axis("off")
+  st.pyplot()
+
+  neg_text = " ".join(comm for comm in sample_neg["stemmed_text"])
+  st.markdown("<p style='text-align: center; color: #6D6E70;'>Negative Word Cloud</p>", unsafe_allow_html=True)
+
+  wc_neg = WordCloud(width=800, height=400, max_words=300).generate(neg_text)
+  plt.figure(figsize=(12,10))
+  plt.imshow(wc_neg, interpolation="bilinear")
+  plt.axis("off")
+  st.pyplot()
+
+  net_text = " ".join(comm for comm in sample_net["stemmed_text"])
+  st.markdown("<p style='text-align: center; color: #6D6E70;'>Neutral Word Cloud</p>", unsafe_allow_html=True)
+
+  wc_net = WordCloud(width=800, height=400, max_words=300).generate(net_text)
+  plt.figure(figsize=(12,10))
+  plt.imshow(wc_net, interpolation="bilinear")
+  plt.axis("off")
+  st.pyplot()
+  
+  return None
+
+def deploy_distribution(prediction_table):
+  prediction_tabel = prediction_table['sentiment']
+  prediction_table['Sentiment Distribution'] = prediction_table['sentiment']
+  st.markdown("<p style='text-align: center; color: #6D6E70;'>Sentiment Summary", unsafe_allow_html=True)
+  plt.figure(figsize = (8,7))
+  sns.countplot(x=prediction_table['Sentiment Distribution'], data=prediction_table, 
+                # palette='magma',
+                palette = ['#105588'],
+                order = prediction_table['Sentiment Distribution'].value_counts().index)
+  st.pyplot()
+  return None
+
+
+# Web App GUI
 st.set_page_config(
     page_title="Twitter Sentiment Analysis",
     page_icon="🤖",
@@ -228,6 +310,7 @@ st.set_page_config(
         'About': "# This is a header. This is an *extremely* cool app!",
     }
 )
+st.set_option('deprecation.showPyplotGlobalUse', False)
 
 logo = Image.open('images/edts.png')
 st.image(logo, width=100)
@@ -243,57 +326,16 @@ twitter_search = st.text_input("Let's search some Twitter keywords 👇", help="
 if st.button('Search tweet'):
     col1, col2 = st.columns([2,1])
     with col1:
-      def deploy_sentiment():
+      def deploy_output():
         query = twitter_search
-        query  =  query.lower() + ' -is:retweet lang:id'
-        data = get_tweets(query)
-        data = data[['tweet_id', 'tweet_date','text']]
-        data['tweet_date'] = pd.to_datetime(data['tweet_date'], format="%F")
-        clean_data = preprocess_this(data['text'])
-        data = pd.concat([data, clean_data['stemmed_text']], axis=1)
-        data['sentiment'] = roberta_predict(data['stemmed_text'])
-        data.drop_duplicates(inplace = True)
-        data.reset_index(inplace = True, drop = True) 
-        output_data = data[['tweet_id', 'tweet_date', 'text', 'sentiment']]
-        return output_data
-      
-      tes=deploy_sentiment()
-
-      st.table(tes)
-
-        # sentiment_label=["Positive", "Neutral", "Negative"]
-        # df = pd.DataFrame(
-        #     {
-        #     "Tweets": [
-        #         "Keren Banget!",
-        #         "Biasa aja",
-        #         "best sangat ke mencuri raden saleh ni",
-        #         "Ternyata film kkn di desa penari biasa aja, dulu takut nonton di bioskop soalnya thread yang di twitter serem eh pas jadi film malah b aja engga ada seremnya 😂",
-        #         "GUE BARU NONTON THOR LOVE AND THUNDER. WITH NO SPOILERS. GILA... BANGGA BGT GW BISA BEBAS DARI SPOILER 😍😍😍",
-        #         "Film Thor love and Thunder seru, kocag juga wkwkwk 😂😂",
-        #         "yeyyy udh selse ntn one piece film red ... keren bangett 🤩 rasanya pengen bawa lightstick sumpahhh jiwa ngidolku meronta-ronta",
-        #         "Big mouse endingnya jelek bgt anj. Kesel gue. Masih banyak pertanyaan yg belom kejawab. Anaknya chairman kang? Jihoon gatau duitnya di choi doha? Fix harusnya 21 episode anying",
-        #         "big mouse gini doang nih endingnya?",
-        #         "BTW kemarin abis nonton Jujutsu Kaisen 0, kirain Rika bakal nempel terus sama Yuta, ternyata di ending filmnya mereka akhirnya misah, hmm jadi Yuta sekarang kekuatannya apa",
-        #         "asdasdasd",
-        #         "waedwadasd",
-        #         "asdwadasd",
-        #         "wadawdaadw",
-        #         "csacacsc"
-        #         ],
-        #     "Sentiment": np.random.choice(sentiment_label,15),
-        #     }
-        # )
-        # st.table(df)
-    with col2:
-        st.markdown("<p style='text-align: center; color: #6D6E70;'>Positive Word Cloud</p>", unsafe_allow_html=True)
-        positive = Image.open('images/positive.png')
-        st.image(positive)
-
-        st.markdown("<p style='text-align: center; color: #6D6E70;'>Negative Word Cloud</p>", unsafe_allow_html=True)
-        negative = Image.open('images/negative.png')
-        st.image(negative)
-
-        st.markdown("<p style='text-align: center; color: #6D6E70;'>Neutral Word Cloud</p>", unsafe_allow_html=True)
-        neutral = Image.open('images/neutral.png')
-        st.image(neutral)
+        query = query.lower()
+        title_stopwords = query.split(" ")
+        final_table = deploy_sentiment(query)
+        deploy_final_table = final_table[['tweet_id', 'tweet_date', 'text', 'sentiment']]
+        st.table(deploy_final_table)
+        with col2:
+          deploy_distribution(final_table)
+          deploy_wordcloud(final_table, title_stopwords)
+        return deploy_final_table
+        
+      deploy_output()

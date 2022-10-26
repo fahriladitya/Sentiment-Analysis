@@ -1,0 +1,6 @@
+runtime: python39
+entrypoint: gunicorn -w 4 -k uvicorn.workers.UvicornWorker main:app
+instance_class: B4
+basic_scaling:
+  max_instances: 4
+  idle_timeout: 10m
